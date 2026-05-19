@@ -7,6 +7,8 @@ from src.agents.graph import AgentWorkflow
 from src.cli.commands import HELP_TEXT, CommandType, parse_command
 from src.config import AppConfig
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
+from src.evaluation.dataset import load_evaluation_cases
+from src.evaluation.runner import EvaluationRunner
 from src.rag.indexer import build_local_index, import_document
 
 
@@ -36,6 +38,8 @@ class CliSession:
             return self._handle_export_answer(command.args[0])
         if command.type == CommandType.EXPORT_PLAN:
             return self._handle_export_plan(command.args[0])
+        if command.type == CommandType.EVAL:
+            return self._handle_eval()
         if command.type == CommandType.EXIT:
             return "exit"
         if command.type == CommandType.QUESTION:
@@ -102,3 +106,13 @@ class CliSession:
         )
         return f"Exported study plan to {path}"
 
+    def _handle_eval(self) -> str:
+        dataset_path = self.base_dir / "evals" / "datasets" / "interview_agent_eval.json"
+        cases = load_evaluation_cases(dataset_path)
+        runner = EvaluationRunner(base_dir=self.base_dir)
+        report = runner.run_cases(cases)
+        paths = runner.write_reports(report)
+        return (
+            f"Evaluation complete: {report.passed_cases}/{report.total_cases} passed. "
+            f"Markdown: {paths['markdown']}; JSON: {paths['json']}; PDF: {paths['pdf']}"
+        )

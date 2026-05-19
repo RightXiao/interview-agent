@@ -54,6 +54,7 @@ Commands:
 /clear
 /export answer output/answer.pdf
 /export plan output/study_plan.pdf
+/eval
 /exit
 ```
 
@@ -106,4 +107,34 @@ python -m pytest -q
 ```
 
 The tests are designed to avoid real LLM calls.
+
+## Evaluation
+
+Run the local evaluation suite:
+
+```bash
+python -m src.evaluation.run
+```
+
+Or from the interactive CLI:
+
+```text
+/eval
+```
+
+Reports are written to:
+
+```text
+evals/reports/eval_report.md
+evals/reports/eval_report.json
+evals/reports/eval_report.pdf
+```
+
+The default evaluator uses deterministic local metrics aligned with mainstream evaluation dimensions:
+
+- RAGAS-style RAG metrics: answer relevancy, faithfulness, context precision, context recall.
+- DeepEval-style agent/task metrics: tool success, memory hit rate, multi-agent completeness.
+- LangSmith-style experiment structure: dataset cases, repeated execution, per-case report output.
+
+This keeps the first version locally runnable and interview-friendly while leaving room to integrate official hosted or LLM-judge evaluators later.
 

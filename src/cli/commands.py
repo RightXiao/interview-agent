@@ -12,6 +12,7 @@ class CommandType(str, Enum):
     CLEAR = "clear"
     EXPORT_ANSWER = "export_answer"
     EXPORT_PLAN = "export_plan"
+    EVAL = "eval"
     EXIT = "exit"
     QUESTION = "question"
     UNKNOWN = "unknown"
@@ -51,6 +52,8 @@ def parse_command(raw: str) -> ParsedCommand:
         return ParsedCommand(CommandType.EXPORT_ANSWER, [args[1]], raw)
     if command == "/export" and len(args) == 2 and args[0] == "plan":
         return ParsedCommand(CommandType.EXPORT_PLAN, [args[1]], raw)
+    if command == "/eval":
+        return ParsedCommand(CommandType.EVAL, [], raw)
     return ParsedCommand(CommandType.UNKNOWN, args, raw)
 
 
@@ -62,6 +65,6 @@ HELP_TEXT = """Commands:
 /clear                        Clear short-term session memory
 /export answer output/a.pdf    Export last answer to PDF
 /export plan output/plan.pdf   Export latest study plan to PDF
+/eval                         Run evaluation and write reports
 /exit                         Exit the CLI
 """
-

@@ -18,3 +18,8 @@ def test_parse_export_answer_command():
     assert command.type == CommandType.EXPORT_ANSWER
     assert command.args == ["output/a.pdf"]
 
+
+def test_parse_eval_command():
+    command = parse_command("/eval")
+    assert command.type == CommandType.EVAL
+    assert command.args == []

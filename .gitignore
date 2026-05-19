@@ -10,6 +10,8 @@ data/memory/*.json
 data/vector_store/*
 data/uploads/*
 output/*
+evals/reports/*
 !data/vector_store/.gitkeep
 !data/uploads/.gitkeep
 !output/.gitkeep
+!evals/reports/.gitkeep

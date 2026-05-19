@@ -1,0 +1,39 @@
+[
+  {
+    "id": "rag_001",
+    "question": "Explain RAG for an AI agent interview.",
+    "expected_keywords": ["RAG", "retrieval", "generation"],
+    "expected_sources": ["rag_basics.md"],
+    "expected_tools": ["search_knowledge_base"],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "weak_points": ["RAG"]
+    }
+  },
+  {
+    "id": "tool_001",
+    "question": "How does tool calling work in this project?",
+    "expected_keywords": ["tool", "registry", "agent"],
+    "expected_sources": ["tool_calling.md"],
+    "expected_tools": ["search_knowledge_base"],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "recent_topics": ["tool calling"]
+    }
+  },
+  {
+    "id": "memory_001",
+    "question": "Create a study plan based on my weak point RAG.",
+    "expected_keywords": ["study", "plan", "RAG"],
+    "expected_sources": ["memory_design.md"],
+    "expected_tools": ["search_knowledge_base", "read_user_profile", "update_user_profile"],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "weak_points": ["RAG"]
+    }
+  }
+]
+
