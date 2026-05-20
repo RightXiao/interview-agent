@@ -1,6 +1,6 @@
-from src.documents.models import LoadedDocument
-from src.rag.indexer import LocalKnowledgeIndex
-from src.rag.retriever import retrieve_from_local_index
+from src.documents.models import LoadedDocument, TextChunk
+from src.rag.indexer import VectorStore
+from src.rag.retriever import retrieve_from_store
 from src.rag.splitter import split_documents
 
 
@@ -20,18 +20,14 @@ def test_splitter_preserves_pdf_page_metadata():
     assert chunks[0].metadata["source_type"] == "pdf"
 
 
-def test_local_index_retrieves_matching_chunk(tmp_path):
-    index = LocalKnowledgeIndex(tmp_path / "index.json")
-    index.write(
-        [
-            {
-                "text": "LangGraph coordinates agent workflows.",
-                "metadata": {"source_path": "agent.md", "source_type": "md", "page": None},
-            }
-        ]
+def test_vector_store_retrieves_matching_chunk(tmp_path):
+    store = VectorStore(persist_dir=tmp_path)
+    chunk = TextChunk(
+        text="LangGraph coordinates agent workflows.",
+        metadata={"source_path": "agent.md", "source_type": "md", "page": None},
     )
+    store.add([chunk])
 
-    results = retrieve_from_local_index(index, "agent workflows", top_k=1)
+    results = retrieve_from_store(store, "agent workflows", top_k=1)
 
     assert results[0]["metadata"]["source_path"] == "agent.md"
-

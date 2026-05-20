@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from src.tools.registry import generate_interview_questions, generate_study_plan
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.tools.registry import ToolRegistry
 
 
 class CoordinatorAgent:
+    def __init__(self, tools: "ToolRegistry") -> None:
+        self.tools = tools
+
     def plan(self, question: str) -> dict[str, bool]:
         text = question.lower()
         return {
-            "needs_rag": True,
+            "needs_rag": self.tools.has("search_knowledge_base"),
             "needs_interview": any(keyword in text for keyword in ["interview", "面试", "question", "题"]),
             "needs_plan": any(keyword in text for keyword in ["plan", "学习", "study", "准备"]),
         }
@@ -40,8 +46,12 @@ class ExplainerAgent:
 
 
 class InterviewerAgent:
-    def run(self, topic: str) -> str:
-        return "\n".join(f"{index}. {question}" for index, question in enumerate(generate_interview_questions(topic), start=1))
+    def run(self, topic: str, tools: "ToolRegistry") -> str:
+        try:
+            questions = tools.call("generate_interview_questions", topic)
+        except Exception:
+            questions = [f"What do you know about {topic}?"]
+        return "\n".join(f"{index}. {question}" for index, question in enumerate(questions, start=1))
 
 
 class ReviewerAgent:
@@ -53,6 +63,8 @@ class ReviewerAgent:
 
 
 class StudyPlannerAgent:
-    def run(self, topic: str) -> str:
-        return generate_study_plan(topic)
-
+    def run(self, topic: str, tools: "ToolRegistry") -> str:
+        try:
+            return tools.call("generate_study_plan", topic)
+        except Exception:
+            return f"Study plan for {topic}\n1. Understand the core concept.\n2. Map to project modules.\n3. Prepare interview explanation.\n4. Practice follow-up questions.\n5. Review trade-offs and test strategy."

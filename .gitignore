@@ -8,6 +8,7 @@ __pycache__/
 *.egg-info/
 data/memory/*.json
 data/vector_store/*
+!data/vector_store/.gitkeep
 data/uploads/*
 output/*
 evals/reports/*

@@ -16,7 +16,7 @@ from src.evaluation.metrics import (
     score_tool_success_rate,
 )
 from src.evaluation.report import write_json_report, write_markdown_report, write_pdf_report
-from src.rag.indexer import build_local_index
+from src.rag.indexer import VectorStore, build_local_index
 
 
 class EvaluationRunner:
@@ -24,6 +24,7 @@ class EvaluationRunner:
         self.base_dir = Path(base_dir)
         self.report_dir = Path(report_dir) if report_dir else self.base_dir / "evals" / "reports"
         self.threshold = threshold
+        self.store = VectorStore(persist_dir=self.base_dir / "data" / "vector_store")
 
     def run_cases(self, cases: list[EvaluationCase]) -> EvaluationReport:
         self._prepare_index()
@@ -53,7 +54,7 @@ class EvaluationRunner:
     def _prepare_index(self) -> None:
         build_local_index(
             [self.base_dir / "data" / "knowledge_base", self.base_dir / "data" / "uploads"],
-            self.base_dir / "data" / "vector_store" / "local_index.json",
+            self.store,
         )
 
     def _run_case(self, case: EvaluationCase) -> CaseScore:
@@ -66,7 +67,7 @@ class EvaluationRunner:
         latency_ms = (time.perf_counter() - started) * 1000
 
         observed_tools = self._observed_tools(case, result.sources)
-        contexts = [item["text"] for item in workflow.index.read()]
+        contexts = [item["text"] for item in workflow.store.read_all()]
         metrics = {
             "answer_relevancy": score_keyword_coverage(result.answer, case.expected_keywords),
             "context_precision": score_source_precision(result.sources, case.expected_sources),

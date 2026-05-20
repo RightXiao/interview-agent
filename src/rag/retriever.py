@@ -1,26 +1,15 @@
 from __future__ import annotations
 
-import re
-from collections import Counter
-
-from src.rag.indexer import LocalKnowledgeIndex
+from src.rag.indexer import VectorStore
 
 
-def retrieve_from_local_index(
-    index: LocalKnowledgeIndex,
+def retrieve_from_store(
+    store: VectorStore,
     query: str,
     top_k: int = 4,
 ) -> list[dict]:
-    entries = index.read()
-    query_terms = _terms(query)
-    scored = []
-    for entry in entries:
-        text_terms = _terms(entry.get("text", ""))
-        score = sum((query_terms & text_terms).values())
-        if score > 0:
-            scored.append((score, entry))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [entry for _, entry in scored[:top_k]]
+    """Retrieve top_k chunks from the vector store for a given query."""
+    return store.search(query, top_k)
 
 
 def format_sources(results: list[dict]) -> list[str]:
@@ -33,8 +22,3 @@ def format_sources(results: list[dict]) -> list[str]:
         if label not in sources:
             sources.append(label)
     return sources
-
-
-def _terms(text: str) -> Counter:
-    return Counter(re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]+", text.lower()))
-

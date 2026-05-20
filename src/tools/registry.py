@@ -5,8 +5,8 @@ from typing import Any, Callable
 
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
 from src.memory.store import MemoryStore
-from src.rag.indexer import LocalKnowledgeIndex
-from src.rag.retriever import format_sources, retrieve_from_local_index
+from src.rag.indexer import VectorStore
+from src.rag.retriever import format_sources, retrieve_from_store
 
 
 class ToolNotFoundError(KeyError):
@@ -29,20 +29,24 @@ class ToolRegistry:
         return self._tools[name](*args, **kwargs)
 
     @classmethod
-    def with_defaults(cls, base_dir: Path | str = ".", font_path: str | None = None) -> "ToolRegistry":
-        base = Path(base_dir)
-        memory = MemoryStore(base / "data" / "memory")
-        index = LocalKnowledgeIndex(base / "data" / "vector_store" / "local_index.json")
+    def with_defaults(
+        cls, store: VectorStore, memory: MemoryStore, font_path: str | None = None
+    ) -> "ToolRegistry":
         registry = cls()
 
         registry.register("read_user_profile", memory.get_profile)
         registry.register("update_user_profile", memory.update_profile)
         registry.register("generate_interview_questions", generate_interview_questions)
         registry.register("generate_study_plan", generate_study_plan)
-        registry.register("search_knowledge_base", lambda query, top_k=4: retrieve_from_local_index(index, query, top_k))
+        registry.register(
+            "search_knowledge_base",
+            lambda query, top_k=4: retrieve_from_store(store, query, top_k),
+        )
         registry.register(
             "export_last_answer_to_pdf",
-            lambda title, content, sources, output_path: export_answer_to_pdf(title, content, sources, output_path, font_path),
+            lambda title, content, sources, output_path: export_answer_to_pdf(
+                title, content, sources, output_path, font_path
+            ),
         )
         registry.register(
             "export_study_plan_to_pdf",
@@ -78,4 +82,3 @@ def summarize_search_results(results: list[dict]) -> str:
     sources = format_sources(results)
     snippets = "\n".join(f"- {item['text'][:220]}" for item in results)
     return f"Retrieved context:\n{snippets}\nSources: {', '.join(sources)}"
-

@@ -9,14 +9,20 @@ from src.config import AppConfig
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
 from src.evaluation.dataset import load_evaluation_cases
 from src.evaluation.runner import EvaluationRunner
-from src.rag.indexer import build_local_index, import_document
+from src.rag.indexer import VectorStore, build_local_index, import_document
 
 
 class CliSession:
     def __init__(self, base_dir: Path | str = ".", config: AppConfig | None = None) -> None:
         self.base_dir = Path(base_dir)
         self.config = config or AppConfig.from_env(self.base_dir)
-        self.workflow = AgentWorkflow(base_dir=self.base_dir, top_k=self.config.rag_top_k)
+        self.store = VectorStore(
+            persist_dir=self.base_dir / "data" / "vector_store",
+            embedding_model=self.config.embedding_model,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
+        )
+        self.workflow = AgentWorkflow(base_dir=self.base_dir, top_k=self.config.rag_top_k, config=self.config)
         self.latest_answer = ""
         self.latest_sources: list[str] = []
         self.latest_study_plan = ""
@@ -68,7 +74,7 @@ class CliSession:
     def _handle_reindex(self) -> str:
         count = build_local_index(
             [self.base_dir / "data" / "knowledge_base", self.base_dir / "data" / "uploads"],
-            self.base_dir / "data" / "vector_store" / "local_index.json",
+            self.store,
         )
         return f"Reindexed {count} chunks."
 

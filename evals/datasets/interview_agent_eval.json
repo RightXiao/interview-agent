@@ -34,6 +34,61 @@
       "target_role": "AI Agent Engineer",
       "weak_points": ["RAG"]
     }
+  },
+  {
+    "id": "agent_001",
+    "question": "How do multiple agents collaborate in a project?",
+    "expected_keywords": ["agent", "module", "project"],
+    "expected_sources": ["multi_agent.md"],
+    "expected_tools": ["search_knowledge_base"],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "recent_topics": ["agent"]
+    }
+  },
+  {
+    "id": "basics_001",
+    "question": "What are the basics of building an AI agent?",
+    "expected_keywords": ["agent", "tool", "memory"],
+    "expected_sources": ["agent_basics.md"],
+    "expected_tools": ["search_knowledge_base"],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {}
+  },
+  {
+    "id": "study_plan_001",
+    "question": "I want a study plan to prepare for an agent engineering interview.",
+    "expected_keywords": ["study", "plan", "interview", "prepare"],
+    "expected_sources": [],
+    "expected_tools": [],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "learning_goals": ["interview preparation"]
+    }
+  },
+  {
+    "id": "chinese_001",
+    "question": "请解释什么是RAG检索增强生成？",
+    "expected_keywords": ["RAG", "project", "module"],
+    "expected_sources": [],
+    "expected_tools": [],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "AI Agent Engineer",
+      "weak_points": ["RAG"]
+    }
+  },
+  {
+    "id": "no_rag_001",
+    "question": "Give me interview tips for a technical role.",
+    "expected_keywords": ["interview", "review", "business", "strong"],
+    "expected_sources": [],
+    "expected_tools": [],
+    "expected_agent_sections": ["Explanation", "Interview follow-ups", "Review advice"],
+    "memory_seed": {
+      "target_role": "Software Engineer"
+    }
   }
 ]
-
