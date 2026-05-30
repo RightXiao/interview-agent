@@ -7,6 +7,7 @@ from src.agents.graph import AgentWorkflow
 from src.cli.commands import HELP_TEXT, CommandType, parse_command
 from src.config import AppConfig
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
+from src.llm.client import OpenAICompatibleClient
 from src.evaluation.dataset import load_evaluation_cases
 from src.evaluation.runner import EvaluationRunner
 from src.rag.indexer import VectorStore, build_local_index, import_document
@@ -22,7 +23,8 @@ class CliSession:
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
         )
-        self.workflow = AgentWorkflow(base_dir=self.base_dir, top_k=self.config.rag_top_k, config=self.config)
+        llm = OpenAICompatibleClient(config=self.config) if self.config.validate_llm() == [] else None
+        self.workflow = AgentWorkflow(base_dir=self.base_dir, llm=llm, top_k=self.config.rag_top_k, config=self.config)
         self.latest_answer = ""
         self.latest_sources: list[str] = []
         self.latest_study_plan = ""

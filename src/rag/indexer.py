@@ -39,6 +39,7 @@ class VectorStore:
             model=embedding_model,
             base_url=base_url,
             api_key=api_key,
+            check_embedding_ctx_length=False,
         )
         self._collection = self._client.get_or_create_collection("knowledge_base")
 
