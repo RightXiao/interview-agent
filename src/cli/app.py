@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from src.agents.graph import AgentWorkflow
+from src.agents.workflow import InterviewWorkflow
 from src.cli.commands import CommandRegistry, create_default_registry
 from src.cli.commands.base import CommandContext, OutputType
 from src.cli.session import SessionManager
@@ -70,13 +70,12 @@ class InterviewApp:
             api_key=self.config.llm_api_key,
         )
         llm = OpenAICompatibleClient(config=self.config) if self.config.validate_llm() == [] else None
-        self.workflow = AgentWorkflow(
+        self.workflow = InterviewWorkflow(
             base_dir=self.base_dir,
             llm=llm,
             top_k=self.config.rag_top_k,
-            config=self.config,
-            store=self.store,
         )
+        self.workflow.set_store(self.store)
 
     def _show_banner(self) -> None:
         """显示启动横幅"""
