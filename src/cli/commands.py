@@ -17,8 +17,26 @@ class CommandType(str, Enum):
     SESSIONS = "sessions"
     RESUME = "resume"
     TEMPLATE = "template"
+    MENU = "menu"
     QUESTION = "question"
     UNKNOWN = "unknown"
+
+
+COMMAND_MENU = [
+    ("/help", "Show commands"),
+    ("/import <path>", "Import .md, .txt, or .pdf into uploads"),
+    ("/memory", "Show user profile and short-term memory"),
+    ("/reindex", "Rebuild the local knowledge index"),
+    ("/clear", "Clear short-term session memory"),
+    ("/export answer <path>", "Export last answer to PDF"),
+    ("/export plan <path>", "Export latest study plan to PDF"),
+    ("/eval", "Run evaluation and write reports"),
+    ("/sessions", "List saved sessions"),
+    ("/resume <id>", "Resume a saved session"),
+    ("/template", "List available templates"),
+    ("/template <name>", "Switch to a template"),
+    ("/exit", "Exit the CLI"),
+]
 
 
 @dataclass(frozen=True)
@@ -32,6 +50,8 @@ def parse_command(raw: str) -> ParsedCommand:
     text = raw.strip()
     if not text:
         return ParsedCommand(CommandType.UNKNOWN, [], raw)
+    if text == "/":
+        return ParsedCommand(CommandType.MENU, [], raw)
     if not text.startswith("/"):
         return ParsedCommand(CommandType.QUESTION, [text], raw)
 

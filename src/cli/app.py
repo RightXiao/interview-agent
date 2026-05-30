@@ -12,7 +12,7 @@ from pathlib import Path
 
 from src.agents.graph import AgentWorkflow
 from src.agents.templates import get_template, list_templates
-from src.cli.commands import HELP_TEXT, CommandType, parse_command
+from src.cli.commands import COMMAND_MENU, HELP_TEXT, CommandType, parse_command
 from src.config import AppConfig
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
 from src.llm.client import OpenAICompatibleClient
@@ -67,6 +67,11 @@ class CliSession:
         command = parse_command(raw)
         if command.type == CommandType.HELP:
             return HELP_TEXT
+        if command.type == CommandType.MENU:
+            selected = self._handle_menu()
+            if selected.startswith("/"):
+                return self.handle_input(selected)
+            return selected
         if command.type == CommandType.IMPORT:
             return self._handle_import(command.args[0])
         if command.type == CommandType.MEMORY:
@@ -107,6 +112,7 @@ class CliSession:
         readline.parse_and_bind('"\\e[D": backward-char')
         readline.parse_and_bind('"\\e[A": previous-history')
         readline.parse_and_bind('"\\e[B": next-history')
+        self._setup_completion()
 
         self._print_banner()
         while True:
@@ -162,6 +168,38 @@ class CliSession:
         print(f"\033[90m{line}\033[0m")
         print(f"{'Goodbye!':^{w}}")
         print(f"\033[90m{line}\033[0m")
+
+    def _setup_completion(self) -> None:
+        commands = [cmd for cmd, _ in COMMAND_MENU]
+
+        def completer(text: str, state: int) -> str | None:
+            matches = [c for c in commands if c.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        readline.set_completer(completer)
+        readline.set_completer_delims(" \t")
+
+    def _handle_menu(self) -> str:
+        lines = []
+        for i, (cmd, desc) in enumerate(COMMAND_MENU, start=1):
+            lines.append(f"  \033[36m{i:>2}\033[0m. \033[1m{cmd:<28}\033[0m {desc}")
+        lines.append("")
+        lines.append("  Type a number or command name:")
+        print("\n".join(lines))
+        try:
+            choice = input("\033[36m>\033[0m ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return ""
+        if not choice:
+            return ""
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(COMMAND_MENU):
+                return COMMAND_MENU[idx][0]
+            return f"Invalid choice: {choice}"
+        if choice.startswith("/"):
+            return choice
+        return f"Unknown selection: {choice}"
 
     def _handle_import(self, source: str) -> str:
         uploads_dir = self.base_dir / "data" / "uploads"

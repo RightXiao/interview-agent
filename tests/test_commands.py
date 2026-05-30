@@ -52,3 +52,9 @@ def test_parse_template_select():
     command = parse_command("/template bigtech")
     assert command.type == CommandType.TEMPLATE
     assert command.args == ["bigtech"]
+
+
+def test_parse_menu_command():
+    command = parse_command("/")
+    assert command.type == CommandType.MENU
+    assert command.args == []
