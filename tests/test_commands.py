@@ -54,7 +54,6 @@ def test_parse_template_select():
     assert command.args == ["bigtech"]
 
 
-def test_parse_menu_command():
+def test_parse_slash_only():
     command = parse_command("/")
-    assert command.type == CommandType.MENU
-    assert command.args == []
+    assert command.type == CommandType.UNKNOWN

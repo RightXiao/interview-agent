@@ -6,8 +6,9 @@ import os
 import readline
 import shutil
 import sys
+import termios
 import threading
-import time
+import tty
 from pathlib import Path
 
 from src.agents.graph import AgentWorkflow
@@ -19,6 +20,9 @@ from src.llm.client import OpenAICompatibleClient
 from src.evaluation.dataset import load_evaluation_cases
 from src.evaluation.runner import EvaluationRunner
 from src.rag.indexer import VectorStore, build_local_index, import_document
+
+
+_CMD_NAMES = [cmd for cmd, _ in COMMAND_MENU]
 
 
 class _Spinner:
@@ -47,6 +51,21 @@ class _Spinner:
             self._stop_event.wait(0.1)
 
 
+def _is_tty() -> bool:
+    return sys.stdin.isatty()
+
+
+def _read_char() -> str:
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch
+
+
 class CliSession:
     def __init__(self, base_dir: Path | str = ".", config: AppConfig | None = None) -> None:
         self.base_dir = Path(base_dir)
@@ -67,8 +86,6 @@ class CliSession:
         command = parse_command(raw)
         if command.type == CommandType.HELP:
             return HELP_TEXT
-        if command.type == CommandType.MENU:
-            return self._handle_menu()
         if command.type == CommandType.IMPORT:
             return self._handle_import(command.args[0])
         if command.type == CommandType.MEMORY:
@@ -96,6 +113,8 @@ class CliSession:
             return self._handle_question(command.args[0])
         return "Unknown command. Use /help to see available commands."
 
+    # ── main loop ──────────────────────────────────────────────
+
     def run(self) -> None:
         history_path = self.base_dir / "data" / ".cli_history"
         history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,17 +123,15 @@ class CliSession:
         except FileNotFoundError:
             pass
         readline.set_history_length(500)
-        readline.parse_and_bind("tab: complete")
-        readline.parse_and_bind('"\\e[C": forward-char')
-        readline.parse_and_bind('"\\e[D": backward-char')
-        readline.parse_and_bind('"\\e[A": previous-history')
-        readline.parse_and_bind('"\\e[B": next-history')
-        self._setup_completion()
 
         self._print_banner()
+        use_palette = _is_tty()
         while True:
             try:
-                raw = self._prompt_input()
+                if use_palette:
+                    raw = self._interactive_input()
+                else:
+                    raw = input("> ")
             except (EOFError, KeyboardInterrupt):
                 self._save_on_exit()
                 print("\nBye.")
@@ -133,31 +150,174 @@ class CliSession:
         except OSError:
             pass
 
+    # ── interactive input with command palette ─────────────────
+
+    def _interactive_input(self) -> str:
+        w = self._term_width()
+        sys.stdout.write(f"\033[90m{'─' * w}\033[0m\r\033[90m{'─' * w}\033[0m\n")
+        sys.stdout.write("\033[36m>\033[0m ")
+        sys.stdout.flush()
+
+        buf = ""
+        palette_visible = False
+        palette_selected = 0
+        palette_lines = 0
+
+        while True:
+            ch = _read_char()
+
+            # ── Enter ──
+            if ch in ("\r", "\n"):
+                if palette_visible:
+                    matches = self._palette_matches(buf)
+                    if matches:
+                        cmd = matches[palette_selected]
+                        self._clear_palette(palette_lines)
+                        sys.stdout.write(f"\033[2K\r\033[36m>\033[0m {cmd}\n")
+                        readline.add_history(cmd)
+                        return cmd
+                self._clear_palette(palette_lines)
+                sys.stdout.write("\n")
+                if buf.strip():
+                    readline.add_history(buf)
+                return buf
+
+            # ── Escape ──
+            if ch == "\x1b":
+                if palette_visible:
+                    self._clear_palette(palette_lines)
+                    palette_visible = False
+                    palette_lines = 0
+                continue
+
+            # ── Arrow keys (escape sequences) ──
+            if ch == "\x1b":
+                ch2 = _read_char()
+                if ch2 == "[":
+                    ch3 = _read_char()
+                    if ch3 == "A" and palette_visible:  # Up
+                        matches = self._palette_matches(buf)
+                        if matches:
+                            palette_selected = (palette_selected - 1) % len(matches)
+                            self._redraw_palette(buf, palette_selected, palette_lines)
+                        continue
+                    if ch3 == "B" and palette_visible:  # Down
+                        matches = self._palette_matches(buf)
+                        if matches:
+                            palette_selected = (palette_selected + 1) % len(matches)
+                            self._redraw_palette(buf, palette_selected, palette_lines)
+                        continue
+                    if ch3 == "C":  # Right
+                        continue
+                    if ch3 == "D":  # Left
+                        continue
+                continue
+
+            # ── Ctrl-C ──
+            if ch == "\x03":
+                self._clear_palette(palette_lines)
+                sys.stdout.write("\n")
+                raise KeyboardInterrupt
+
+            # ── Ctrl-D ──
+            if ch == "\x04":
+                if not buf:
+                    self._clear_palette(palette_lines)
+                    sys.stdout.write("\n")
+                    raise EOFError
+                continue
+
+            # ── Backspace ──
+            if ch in ("\x7f", "\x08"):
+                if buf:
+                    buf = buf[:-1]
+                    self._rewrite_input(buf)
+                    palette_selected = 0
+                    if buf.startswith("/") and len(buf) > 0:
+                        matches = self._palette_matches(buf)
+                        if matches:
+                            palette_lines = self._draw_palette(matches, palette_selected, palette_lines)
+                            palette_visible = True
+                        else:
+                            self._clear_palette(palette_lines)
+                            palette_visible = False
+                            palette_lines = 0
+                    elif palette_visible:
+                        self._clear_palette(palette_lines)
+                        palette_visible = False
+                        palette_lines = 0
+                continue
+
+            # ── Tab (cycle palette) ──
+            if ch == "\t" and palette_visible:
+                matches = self._palette_matches(buf)
+                if matches:
+                    palette_selected = (palette_selected + 1) % len(matches)
+                    self._redraw_palette(buf, palette_selected, palette_lines)
+                continue
+
+            # ── Printable character ──
+            if ch.isprintable():
+                buf += ch
+                self._rewrite_input(buf)
+                palette_selected = 0
+
+                if buf.startswith("/"):
+                    matches = self._palette_matches(buf)
+                    if matches:
+                        palette_lines = self._draw_palette(matches, palette_selected, palette_lines)
+                        palette_visible = True
+                    else:
+                        self._clear_palette(palette_lines)
+                        palette_visible = False
+                        palette_lines = 0
+                elif palette_visible:
+                    self._clear_palette(palette_lines)
+                    palette_visible = False
+                    palette_lines = 0
+
+    def _palette_matches(self, buf: str) -> list[str]:
+        if not buf:
+            return []
+        return [c for c in _CMD_NAMES if c.startswith(buf)]
+
+    def _draw_palette(self, matches: list[str], selected: int, old_lines: int) -> int:
+        self._clear_palette(old_lines)
+        for i, cmd in enumerate(matches):
+            if i == selected:
+                sys.stdout.write(f"  \033[47;30m {cmd} \033[0m\n")
+            else:
+                sys.stdout.write(f"  \033[90m{cmd}\033[0m\n")
+        sys.stdout.flush()
+        return len(matches)
+
+    def _redraw_palette(self, buf: str, selected: int, old_lines: int) -> None:
+        matches = self._palette_matches(buf)
+        self._clear_palette(old_lines)
+        self._draw_palette(matches, selected, 0)
+
+    def _clear_palette(self, lines: int) -> None:
+        for _ in range(lines):
+            sys.stdout.write("\033[A\033[2K")
+        sys.stdout.flush()
+
+    def _rewrite_input(self, buf: str) -> None:
+        sys.stdout.write(f"\033[2K\r\033[36m>\033[0m {buf}")
+        sys.stdout.flush()
+
+    # ── terminal helpers ───────────────────────────────────────
+
     def _term_width(self) -> int:
         return shutil.get_terminal_size((80, 24)).columns
 
     def _print_banner(self) -> None:
         w = self._term_width()
         title = " Interview Coach "
-        line = "─" * (w - 2)
-        # Find center position for title
         pad = (w - 2 - len(title)) // 2
         top = "─" * pad + title + "─" * (w - 2 - pad - len(title))
         print(f"┌{top}┐")
-        print(f"│{'Type /help for commands':^{w - 2}}│")
-        print(f"│{'Type /exit to quit':^{w - 2}}│")
-        print(f"└{line}┘")
-
-    def _prompt_input(self) -> str:
-        w = self._term_width()
-        line = "─" * w
-        print(f"\033[90m{line}\033[0m")
-        try:
-            raw = input("\033[36m>\033[0m ")
-        except (EOFError, KeyboardInterrupt):
-            raise
-        print(f"\033[90m{line}\033[0m")
-        return raw
+        print(f"│{'Type / to see commands, /exit to quit':^{w - 2}}│")
+        print(f"└{'─' * (w - 2)}┘")
 
     def _print_goodbye(self) -> None:
         w = self._term_width()
@@ -166,22 +326,7 @@ class CliSession:
         print(f"{'Goodbye!':^{w}}")
         print(f"\033[90m{line}\033[0m")
 
-    def _setup_completion(self) -> None:
-        commands = [cmd for cmd, _ in COMMAND_MENU]
-
-        def completer(text: str, state: int) -> str | None:
-            matches = [c for c in commands if c.startswith(text)]
-            return matches[state] if state < len(matches) else None
-
-        readline.set_completer(completer)
-        readline.set_completer_delims(" \t")
-
-    def _handle_menu(self) -> str:
-        lines = [""]
-        for i, (cmd, desc) in enumerate(COMMAND_MENU, start=1):
-            lines.append(f"  \033[36m{i:>2}\033[0m  \033[1m{cmd:<26}\033[0m {desc}")
-        lines.append("")
-        return "\n".join(lines)
+    # ── command handlers ───────────────────────────────────────
 
     def _handle_import(self, source: str) -> str:
         uploads_dir = self.base_dir / "data" / "uploads"

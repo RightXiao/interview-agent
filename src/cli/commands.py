@@ -17,7 +17,6 @@ class CommandType(str, Enum):
     SESSIONS = "sessions"
     RESUME = "resume"
     TEMPLATE = "template"
-    MENU = "menu"
     QUESTION = "question"
     UNKNOWN = "unknown"
 
@@ -50,8 +49,6 @@ def parse_command(raw: str) -> ParsedCommand:
     text = raw.strip()
     if not text:
         return ParsedCommand(CommandType.UNKNOWN, [], raw)
-    if text == "/":
-        return ParsedCommand(CommandType.MENU, [], raw)
     if not text.startswith("/"):
         return ParsedCommand(CommandType.QUESTION, [text], raw)
 
