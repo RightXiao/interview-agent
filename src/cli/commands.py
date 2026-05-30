@@ -38,8 +38,11 @@ def parse_command(raw: str) -> ParsedCommand:
 
     if command == "/help":
         return ParsedCommand(CommandType.HELP, [], raw)
-    if command == "/import" and len(args) == 1:
-        return ParsedCommand(CommandType.IMPORT, args, raw)
+    if command == "/import":
+        path = text[len("/import"):].strip()
+        if path:
+            return ParsedCommand(CommandType.IMPORT, [path], raw)
+        return ParsedCommand(CommandType.UNKNOWN, [], "Usage: /import path/to/file.md")
     if command == "/memory":
         return ParsedCommand(CommandType.MEMORY, [], raw)
     if command == "/reindex":
