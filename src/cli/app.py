@@ -77,7 +77,7 @@ class CliSession:
             api_key=self.config.llm_api_key,
         )
         llm = OpenAICompatibleClient(config=self.config) if self.config.validate_llm() == [] else None
-        self.workflow = AgentWorkflow(base_dir=self.base_dir, llm=llm, top_k=self.config.rag_top_k, config=self.config)
+        self.workflow = AgentWorkflow(base_dir=self.base_dir, llm=llm, top_k=self.config.rag_top_k, config=self.config, store=self.store)
         self.latest_answer = ""
         self.latest_sources: list[str] = []
         self.latest_study_plan = ""

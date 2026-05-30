@@ -22,13 +22,14 @@ class AgentWorkflow:
         top_k: int = 4,
         config: Any | None = None,
         template: InterviewTemplate | None = None,
+        store: VectorStore | None = None,
     ) -> None:
         self.base_dir = Path(base_dir)
         self.llm = llm
         self.top_k = top_k
         self.template = template
         self.memory = MemoryStore(self.base_dir / "data" / "memory")
-        self.store = VectorStore(
+        self.store = store or VectorStore(
             persist_dir=self.base_dir / "data" / "vector_store",
             embedding_model=config.embedding_model if config else "",
             base_url=config.llm_base_url if config else "",
