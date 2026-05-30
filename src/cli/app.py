@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import itertools
 import json
+import sys
+import threading
+import time
 from pathlib import Path
 
 from src.agents.graph import AgentWorkflow
@@ -11,6 +15,32 @@ from src.llm.client import OpenAICompatibleClient
 from src.evaluation.dataset import load_evaluation_cases
 from src.evaluation.runner import EvaluationRunner
 from src.rag.indexer import VectorStore, build_local_index, import_document
+
+
+class _Spinner:
+    def __init__(self, label: str = "Thinking") -> None:
+        self._label = label
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join()
+        sys.stdout.write("\r" + " " * (len(self._label) + 10) + "\r")
+        sys.stdout.flush()
+
+    def _run(self) -> None:
+        spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+        while not self._stop_event.is_set():
+            sys.stdout.write(f"\r  {next(spinner)} {self._label}...")
+            sys.stdout.flush()
+            self._stop_event.wait(0.1)
 
 
 class CliSession:
@@ -71,7 +101,16 @@ class CliSession:
     def _handle_import(self, source: str) -> str:
         uploads_dir = self.base_dir / "data" / "uploads"
         target = import_document(source, uploads_dir)
-        return f"Imported {target}"
+        if self.store._use_embeddings:
+            try:
+                count = build_local_index(
+                    [self.base_dir / "data" / "knowledge_base", uploads_dir],
+                    self.store,
+                )
+                return f"Imported {target} and indexed {count} chunks."
+            except Exception as exc:
+                return f"Imported {target}. Reindex failed: {exc}"
+        return f"Imported {target}. No embedding model configured, skipped reindex."
 
     def _handle_reindex(self) -> str:
         count = build_local_index(
@@ -86,7 +125,12 @@ class CliSession:
         return json.dumps({"profile": profile, "short_term_memory": turns}, ensure_ascii=False, indent=2)
 
     def _handle_question(self, question: str) -> str:
-        result = self.workflow.run(question)
+        thinking = _Spinner("Thinking")
+        thinking.start()
+        try:
+            result = self.workflow.run(question)
+        finally:
+            thinking.stop()
         self.latest_answer = result.answer
         self.latest_sources = result.sources
         self.latest_study_plan = result.study_plan

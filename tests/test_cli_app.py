@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from src.cli.app import CliSession
 
 
@@ -6,7 +8,8 @@ def test_cli_session_imports_document(tmp_path):
     source.write_text("RAG note", encoding="utf-8")
     session = CliSession(base_dir=tmp_path)
 
-    result = session.handle_input(f"/import {source}")
+    with patch.object(session.store, "_use_embeddings", False):
+        result = session.handle_input(f"/import {source}")
 
     assert "Imported" in result
 
