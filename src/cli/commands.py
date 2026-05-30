@@ -16,6 +16,7 @@ class CommandType(str, Enum):
     EXIT = "exit"
     SESSIONS = "sessions"
     RESUME = "resume"
+    TEMPLATE = "template"
     QUESTION = "question"
     UNKNOWN = "unknown"
 
@@ -66,6 +67,11 @@ def parse_command(raw: str) -> ParsedCommand:
         if session_id:
             return ParsedCommand(CommandType.RESUME, [session_id], raw)
         return ParsedCommand(CommandType.UNKNOWN, [], "Usage: /resume <session_id>")
+    if command == "/template":
+        name = text[len("/template"):].strip()
+        if name:
+            return ParsedCommand(CommandType.TEMPLATE, [name], raw)
+        return ParsedCommand(CommandType.TEMPLATE, [], raw)
     return ParsedCommand(CommandType.UNKNOWN, args, raw)
 
 
@@ -80,5 +86,7 @@ HELP_TEXT = """Commands:
 /eval                         Run evaluation and write reports
 /sessions                     List saved sessions
 /resume <session_id>          Resume a saved session
+/template                     List available templates
+/template <name>              Switch to a template (bigtech/soe/foreign/unicorn/boutique)
 /exit                         Exit the CLI
 """

@@ -40,3 +40,15 @@ def test_parse_resume_command():
 def test_parse_resume_no_args():
     command = parse_command("/resume")
     assert command.type == CommandType.UNKNOWN
+
+
+def test_parse_template_list():
+    command = parse_command("/template")
+    assert command.type == CommandType.TEMPLATE
+    assert command.args == []
+
+
+def test_parse_template_select():
+    command = parse_command("/template bigtech")
+    assert command.type == CommandType.TEMPLATE
+    assert command.args == ["bigtech"]

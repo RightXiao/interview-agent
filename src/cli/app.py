@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from src.agents.graph import AgentWorkflow
+from src.agents.templates import get_template, list_templates
 from src.cli.commands import HELP_TEXT, CommandType, parse_command
 from src.config import AppConfig
 from src.documents.exporters import export_answer_to_pdf, export_study_plan_to_pdf
@@ -83,6 +84,8 @@ class CliSession:
             return self._handle_sessions()
         if command.type == CommandType.RESUME:
             return self._handle_resume(command.args[0])
+        if command.type == CommandType.TEMPLATE:
+            return self._handle_template(command.args[0] if command.args else "")
         if command.type == CommandType.EXIT:
             return "exit"
         if command.type == CommandType.QUESTION:
@@ -97,6 +100,11 @@ class CliSession:
         except FileNotFoundError:
             pass
         readline.set_history_length(500)
+        readline.parse_and_bind("tab: complete")
+        readline.parse_and_bind('"\\e[C": forward-char')
+        readline.parse_and_bind('"\\e[D": backward-char')
+        readline.parse_and_bind('"\\e[A": previous-history')
+        readline.parse_and_bind('"\\e[B": next-history')
 
         print("Agent Interview Coach CLI. Type /help for commands.")
         while True:
@@ -171,6 +179,24 @@ class CliSession:
         if not self.workflow.memory.load_session(session_id):
             return f"Session '{session_id}' not found."
         return f"Resumed session '{session_id}'."
+
+    def _handle_template(self, name: str) -> str:
+        if not name:
+            templates = list_templates()
+            current = self.workflow.template.name if self.workflow.template else "none"
+            lines = ["Available templates:", ""]
+            for t in templates:
+                marker = " (active)" if t.name == current else ""
+                lines.append(f"  {t.name:12s} {t.label}{marker}")
+                lines.append(f"               {t.description}")
+            lines.append("")
+            lines.append("Usage: /template <name>")
+            return "\n".join(lines)
+        template = get_template(name)
+        if not template:
+            return f"Unknown template '{name}'. Use /template to see available options."
+        self.workflow.set_template(template)
+        return f"Switched to template: {template.label} — {template.description}"
 
     def _save_on_exit(self) -> None:
         turns = self.workflow.memory.get_short_term_memory()

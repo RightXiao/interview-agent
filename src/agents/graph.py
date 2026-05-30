@@ -7,6 +7,7 @@ from langgraph.graph import END, StateGraph
 
 from src.agents.roles import CoordinatorAgent, ExplainerAgent, InterviewerAgent, ReviewerAgent, StudyPlannerAgent
 from src.agents.state import AgentResult, AgentState
+from src.agents.templates import InterviewTemplate
 from src.memory.store import MemoryStore
 from src.rag.indexer import VectorStore
 from src.rag.retriever import format_sources, retrieve_from_store
@@ -20,10 +21,12 @@ class AgentWorkflow:
         llm: Any | None = None,
         top_k: int = 4,
         config: Any | None = None,
+        template: InterviewTemplate | None = None,
     ) -> None:
         self.base_dir = Path(base_dir)
         self.llm = llm
         self.top_k = top_k
+        self.template = template
         self.memory = MemoryStore(self.base_dir / "data" / "memory")
         self.store = VectorStore(
             persist_dir=self.base_dir / "data" / "vector_store",
@@ -33,11 +36,19 @@ class AgentWorkflow:
         )
         font = config.pdf_font_path if config else None
         self.tools = ToolRegistry.with_defaults(self.store, self.memory, font_path=font)
-        self.coordinator = CoordinatorAgent(self.tools)
+        self._build_agents()
+
+    def _build_agents(self) -> None:
+        t = self.template
+        self.coordinator = CoordinatorAgent(self.tools, template=t)
         self.explainer = ExplainerAgent()
-        self.interviewer = InterviewerAgent()
-        self.reviewer = ReviewerAgent()
-        self.study_planner = StudyPlannerAgent()
+        self.interviewer = InterviewerAgent(template=t)
+        self.reviewer = ReviewerAgent(template=t)
+        self.study_planner = StudyPlannerAgent(template=t)
+
+    def set_template(self, template: InterviewTemplate | None) -> None:
+        self.template = template
+        self._build_agents()
 
     def run(self, question: str) -> AgentResult:
         state = AgentState(question=question)
