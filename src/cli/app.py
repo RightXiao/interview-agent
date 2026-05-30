@@ -182,15 +182,7 @@ class CliSession:
                     readline.add_history(buf)
                 return buf
 
-            # ── Escape ──
-            if ch == "\x1b":
-                if palette_visible:
-                    self._clear_palette(palette_lines)
-                    palette_visible = False
-                    palette_lines = 0
-                continue
-
-            # ── Arrow keys (escape sequences) ──
+            # ── Escape / Arrow keys ──
             if ch == "\x1b":
                 ch2 = _read_char()
                 if ch2 == "[":
@@ -200,17 +192,18 @@ class CliSession:
                         if matches:
                             palette_selected = (palette_selected - 1) % len(matches)
                             self._redraw_palette(buf, palette_selected, palette_lines)
-                        continue
-                    if ch3 == "B" and palette_visible:  # Down
+                    elif ch3 == "B" and palette_visible:  # Down
                         matches = self._palette_matches(buf)
                         if matches:
                             palette_selected = (palette_selected + 1) % len(matches)
                             self._redraw_palette(buf, palette_selected, palette_lines)
-                        continue
-                    if ch3 == "C":  # Right
-                        continue
-                    if ch3 == "D":  # Left
-                        continue
+                    # C=Right, D=Left — ignore
+                else:
+                    # Bare Escape (no [) — close palette
+                    if palette_visible:
+                        self._clear_palette(palette_lines)
+                        palette_visible = False
+                        palette_lines = 0
                 continue
 
             # ── Ctrl-C ──
