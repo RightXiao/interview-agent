@@ -9,8 +9,10 @@ from typing import Any
 from src.agents.base import MessageBus
 from src.agents.coordinator import CoordinatorAgent
 from src.agents.interview import InterviewAgent
+from src.agents.jd_analyzer import JDAnalyzerAgent
 from src.agents.post_interview import PostInterviewAgent
 from src.agents.pre_interview import PreInterviewAgent
+from src.agents.resume_agent import ResumeAgent
 from src.agents.state import AgentResult, AgentState
 from src.memory.store import MemoryStore
 from src.rag.retriever import format_sources, retrieve_from_store
@@ -37,10 +39,18 @@ class InterviewWorkflow:
         self.pre_interview = PreInterviewAgent(llm=llm)
         self.interview = InterviewAgent(llm=llm)
         self.post_interview = PostInterviewAgent(llm=llm)
+        self.jd_analyzer = JDAnalyzerAgent(llm=llm)
+        self.resume_agent = ResumeAgent(llm=llm)
 
         # 注册到消息总线
-        for agent in [self.coordinator, self.pre_interview, self.interview, self.post_interview]:
+        for agent in [self.coordinator, self.pre_interview, self.interview,
+                      self.post_interview, self.jd_analyzer, self.resume_agent]:
             agent.set_message_bus(self.message_bus)
+
+        # 用户数据（JD 和简历）
+        self._jd_text: str = ""
+        self._jd_analysis: str = ""
+        self._resume_text: str = ""
 
         # 初始化记忆和 RAG
         self.memory = MemoryStore(self.base_dir / "data" / "memory")
@@ -49,6 +59,27 @@ class InterviewWorkflow:
     def set_store(self, store: Any) -> None:
         """设置向量存储"""
         self.store = store
+
+    def set_jd(self, jd_text: str) -> dict[str, Any]:
+        """设置并分析 JD"""
+        self._jd_text = jd_text
+        result = self.jd_analyzer.execute({"jd_text": jd_text})
+        self._jd_analysis = result.get("jd_analysis", "")
+        return result
+
+    def set_resume(self, resume_text: str) -> dict[str, Any]:
+        """设置并分析简历"""
+        self._resume_text = resume_text
+        return self.resume_agent.execute({
+            "resume_text": resume_text,
+            "jd_analysis": self._jd_analysis,
+        })
+
+    def analyze_match(self) -> dict[str, Any]:
+        """分析简历与 JD 匹配度"""
+        if not self._resume_text or not self._jd_analysis:
+            return {"match_analysis": "请先设置简历和 JD（使用 /resume 和 /jd 命令）"}
+        return {"match_analysis": self.resume_agent.analyze_match(self._resume_text, self._jd_analysis)}
 
     def run(self, question: str) -> AgentResult:
         """执行工作流"""

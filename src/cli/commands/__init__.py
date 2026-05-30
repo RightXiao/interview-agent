@@ -7,6 +7,7 @@ from src.cli.commands.builtin import BuiltinCommands
 from src.cli.commands.data import DataCommands
 from src.cli.commands.document import DocumentCommands
 from src.cli.commands.evaluation import EvaluationCommands
+from src.cli.commands.jd_resume import JDResumeCommands
 
 
 class CommandRegistry:
@@ -100,6 +101,10 @@ def create_default_registry() -> CommandRegistry:
 
     # 注册评估命令
     for cmd in EvaluationCommands.all():
+        registry.register(cmd)
+
+    # 注册 JD 和简历命令
+    for cmd in JDResumeCommands.all():
         registry.register(cmd)
 
     return registry
