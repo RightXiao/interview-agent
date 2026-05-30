@@ -7,13 +7,14 @@
 | 模块 | 说明 |
 |------|------|
 | LangGraph 工作流编排 | 基于 StateGraph 构建路由→检索→协作→生成的完整流程 |
-| Chroma 向量检索 | 使用嵌入向量做语义检索，未配置时自动回退到关键词匹配 |
+| 智能 RAG 检索 | 配置 Embedding 模型时使用 ChromaDB 语义检索，未配置时自动回退到关键词匹配 |
 | 工具注册与调用 | 字符串键名注册工具，智能体通过 ToolRegistry 发现并调用 |
 | 双层级记忆 | 短期会话记忆（session.json）+ 长期用户画像（profile.json） |
 | 多智能体协作 | Coordinator、Explainer、Interviewer、Reviewer、StudyPlanner 五个角色 |
 | PDF 导入 | PyMuPDF 逐页提取文本，保留页码元数据用于来源引用 |
 | PDF 导出 | ReportLab 生成答案和学习计划 PDF，支持配置中文字体 |
 | 本地评估系统 | 8 个数据集案例，多维度指标，输出 md/json/pdf 三种报告 |
+| 交互式 CLI | Claude Code 风格 UI：rich 渲染、prompt_toolkit 输入、Markdown 展示、Spinner 动画 |
 
 ## 快速开始
 
@@ -45,7 +46,13 @@ PDF_FONT_PATH=
 python main.py
 ```
 
-交互式命令：
+### 交互式功能
+
+- **命令面板**：输入 `/` 实时展示可用命令列表，使用上下键选择
+- **Tab 补全**：输入命令前缀后按 Tab 自动补全
+- **命令历史**：使用 ↑↓ 键浏览历史命令
+
+### 可用命令
 
 | 命令 | 说明 |
 |------|------|
@@ -65,38 +72,47 @@ python main.py
 
 ```
 CLI (src/cli/app.py)
-  → commands.py 解析斜杠命令
-  → 普通文本送入 AgentWorkflow.run()
-    → LangGraph StateGraph 执行:
-       route_task → [条件分支] → retrieve_knowledge → collaborate → generate_answer
-    → CoordinatorAgent.plan() 路由决策：是否需要 RAG、是否需要学习计划
-    → VectorStore.search() 从 Chroma（或 JSON 关键词索引）检索
-    → InterviewerAgent / StudyPlannerAgent 通过 ToolRegistry 调用工具
-    → CoordinatorAgent.compose() 整合各 Agent 输出为最终回答
-    → 可选：注入真实 LLM（langchain-openai）优化回答
-    → 保存对话轮到短期记忆，关键词匹配时更新用户画像
+  → InterviewApp 主应用类
+    → InputBox (prompt_toolkit) 底部输入框，支持命令补全
+    → OutputRenderer (rich) Markdown 渲染、Panel、Spinner
+    → CommandRegistry 命令注册表，基于类的命令系统
+    → SessionManager 会话管理（创建、恢复、轮次记录）
+
+  命令执行流程：
+    /xxx → CommandRegistry.execute() → Command.execute()
+    普通文本 → AgentWorkflow.run() → Spinner + Markdown 渲染
+
+  Agent 工作流：
+    → 加载上下文（记忆 + 用户画像）
+    → CoordinatorAgent.plan() 路由决策
+    → retrieve_knowledge() 关键词频率检索
+    → collaborate(): Explainer, Interviewer, Reviewer, (可选) StudyPlanner
+    → CoordinatorAgent.compose() 整合输出
+    → 可选：注入真实 LLM 优化回答
 ```
 
 **模块职责：**
 
 | 模块 | 职责 |
 |------|------|
-| `src/cli/` | 交互式命令行循环，斜杠命令解析 |
+| `src/cli/` | Claude Code 风格 CLI：输入框、输出渲染、命令系统、会话管理 |
+| `src/cli/ui/` | UI 组件：主题、输入框、输出渲染、Spinner、命令面板 |
+| `src/cli/commands/` | 命令系统：基类、内置命令、数据命令、文档命令、评估命令 |
 | `src/agents/` | LangGraph 工作流（graph.py）、智能体角色（roles.py）、状态类型（state.py） |
 | `src/tools/` | 工具注册表，按名注册和调用，智能体通过它发现可用工具 |
 | `src/memory/` | JSON 文件存储：会话记忆 + 用户画像 |
-| `src/rag/` | 文档分块、Chroma 向量存储 / JSON 关键词索引、检索 |
+| `src/rag/` | 文档分块、JSON 关键词索引、检索 |
 | `src/documents/` | md/txt/pdf 文档加载、PDF 导出、数据模型 |
-| `src/llm/` | OpenAI 兼容接口的客户端封装 |
+| `src/llm/` | OpenAI 兼容接口的客户端封装（延迟导入 langchain-openai） |
 | `src/evaluation/` | 数据集加载、多维指标评分、md/json/pdf 报告生成 |
 | `src/config.py` | `.env` → 冻结的 AppConfig 数据类 |
 
 **关键设计决策：**
 
-- RAG 检索在配置了 `EMBEDDING_MODEL` 时使用 ChromaDB + OpenAIEmbeddings 做语义检索，未配置时自动回退到 Counter 关键词匹配，确保测试无需外部 API。
+- RAG 检索使用关键词频率评分（Counter），确保测试无需外部 API 和向量模型。
 - 所有智能体角色默认输出确定性模板，不独立调用 LLM。可在 `AgentWorkflow` 注入 LLM 客户端来优化最终回答。
 - 记忆分为两层：`data/memory/session.json`（短期对话，保留最近 `MEMORY_MAX_TURNS` 轮）和 `data/memory/profile.json`（长期画像）。
-- ToolRegistry 保存了 7 个工具，智能体通过 `tools.call()` 发现和调用，而非直接调用函数。
+- ToolRegistry 保存了多个工具，智能体通过 `tools.call()` 发现和调用，而非直接调用函数。
 
 ## PDF 功能
 
@@ -116,7 +132,7 @@ CLI (src/cli/app.py)
 python -m pytest -q
 ```
 
-共 22 个测试用例，覆盖命令解析、文档加载、PDF 导出、记忆读写、文本分块、工具注册、智能体工作流和评估流程。所有测试使用确定性行为，无需真实 LLM 调用。
+共 41 个测试用例，覆盖命令系统、CLI 应用、会话管理、文档加载、PDF 导出、记忆读写、文本分块、工具注册、智能体工作流和评估流程。所有测试使用确定性行为，无需真实 LLM 调用。
 
 ## 评估系统
 

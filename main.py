@@ -1,8 +1,8 @@
-from src.cli.app import CliSession
+from src.cli.app import run
 
 
 def main() -> None:
-    CliSession().run()
+    run()
 
 
 if __name__ == "__main__":

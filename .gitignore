@@ -1,17 +1,37 @@
+# Environment and secrets
 .env
+
+# Python
 .venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+
+# Testing and linting
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project data (runtime generated)
+data/.cli_history
 data/memory/*.json
+data/sessions/*
 data/vector_store/*
-!data/vector_store/.gitkeep
 data/uploads/*
 output/*
 evals/reports/*
+
+# Keep .gitkeep files
 !data/vector_store/.gitkeep
 !data/uploads/.gitkeep
 !output/.gitkeep
