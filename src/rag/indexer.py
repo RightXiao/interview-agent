@@ -68,7 +68,7 @@ class VectorStore:
                 self._client.delete_collection("knowledge_base")
             except Exception:
                 pass
-            self._collection = self._client.create_collection("knowledge_base")
+            self._collection = self._client.get_or_create_collection("knowledge_base")
         else:
             self._write_json([])
 
