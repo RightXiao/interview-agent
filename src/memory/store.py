@@ -20,6 +20,7 @@ class MemoryStore:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.session_path = self.base_dir / "session.json"
         self.profile_path = self.base_dir / "profile.json"
+        self.sessions_dir = self.base_dir / "sessions"
         self.max_turns = max_turns
 
     def get_short_term_memory(self) -> list[dict[str, str]]:
@@ -65,6 +66,56 @@ class MemoryStore:
     def _write_json(self, path: Path, data: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def save_session_snapshot(self, label: str = "session") -> str:
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        session_id = f"{ts}_{label}"
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        snapshot = {
+            "id": session_id,
+            "timestamp": datetime.now().isoformat(),
+            "turns": self.get_short_term_memory(),
+            "profile": self.get_profile(),
+        }
+        path = self.sessions_dir / f"{session_id}.json"
+        self._write_json(path, snapshot)
+        return session_id
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        if not self.sessions_dir.exists():
+            return []
+        sessions = []
+        for path in sorted(self.sessions_dir.glob("*.json"), reverse=True):
+            data = self._read_json(path, {})
+            if data:
+                turns = data.get("turns", [])
+                preview = ""
+                for turn in turns:
+                    if turn.get("role") == "user":
+                        preview = turn.get("content", "")[:60]
+                        break
+                sessions.append({
+                    "id": data.get("id", path.stem),
+                    "timestamp": data.get("timestamp", ""),
+                    "turn_count": len(turns),
+                    "preview": preview,
+                })
+        return sessions
+
+    def load_session(self, session_id: str) -> bool:
+        path = self.sessions_dir / f"{session_id}.json"
+        if not path.exists():
+            return False
+        data = self._read_json(path, {})
+        if not data:
+            return False
+        self._write_json(self.session_path, {"turns": data.get("turns", [])})
+        profile = data.get("profile")
+        if profile:
+            self._write_json(self.profile_path, profile)
+        return True
 
 
 def _dedupe(values: list[Any]) -> list[Any]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import readline
 import sys
 import threading
 import time
@@ -78,6 +79,10 @@ class CliSession:
             return self._handle_export_plan(command.args[0])
         if command.type == CommandType.EVAL:
             return self._handle_eval()
+        if command.type == CommandType.SESSIONS:
+            return self._handle_sessions()
+        if command.type == CommandType.RESUME:
+            return self._handle_resume(command.args[0])
         if command.type == CommandType.EXIT:
             return "exit"
         if command.type == CommandType.QUESTION:
@@ -85,18 +90,33 @@ class CliSession:
         return "Unknown command. Use /help to see available commands."
 
     def run(self) -> None:
+        history_path = self.base_dir / "data" / ".cli_history"
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            readline.read_history_file(str(history_path))
+        except FileNotFoundError:
+            pass
+        readline.set_history_length(500)
+
         print("Agent Interview Coach CLI. Type /help for commands.")
         while True:
             try:
                 raw = input("> ")
             except (EOFError, KeyboardInterrupt):
+                self._save_on_exit()
                 print("\nBye.")
                 break
             result = self.handle_input(raw)
             if result == "exit":
+                self._save_on_exit()
                 print("Bye.")
                 break
             print(result)
+
+        try:
+            readline.write_history_file(str(history_path))
+        except OSError:
+            pass
 
     def _handle_import(self, source: str) -> str:
         uploads_dir = self.base_dir / "data" / "uploads"
@@ -135,6 +155,27 @@ class CliSession:
         self.latest_sources = result.sources
         self.latest_study_plan = result.study_plan
         return result.answer
+
+    def _handle_sessions(self) -> str:
+        sessions = self.workflow.memory.list_sessions()
+        if not sessions:
+            return "No saved sessions."
+        lines = ["Saved sessions:"]
+        for s in sessions:
+            ts = s["timestamp"][:19].replace("T", " ")
+            preview = s["preview"][:40] + "..." if len(s["preview"]) > 40 else s["preview"]
+            lines.append(f"  {s['id']}  ({s['turn_count']} turns) {ts}  {preview}")
+        return "\n".join(lines)
+
+    def _handle_resume(self, session_id: str) -> str:
+        if not self.workflow.memory.load_session(session_id):
+            return f"Session '{session_id}' not found."
+        return f"Resumed session '{session_id}'."
+
+    def _save_on_exit(self) -> None:
+        turns = self.workflow.memory.get_short_term_memory()
+        if turns:
+            self.workflow.memory.save_session_snapshot("auto")
 
     def _handle_export_answer(self, output_path: str) -> str:
         if not self.latest_answer:

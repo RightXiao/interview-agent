@@ -14,6 +14,8 @@ class CommandType(str, Enum):
     EXPORT_PLAN = "export_plan"
     EVAL = "eval"
     EXIT = "exit"
+    SESSIONS = "sessions"
+    RESUME = "resume"
     QUESTION = "question"
     UNKNOWN = "unknown"
 
@@ -57,6 +59,13 @@ def parse_command(raw: str) -> ParsedCommand:
         return ParsedCommand(CommandType.EXPORT_PLAN, [args[1]], raw)
     if command == "/eval":
         return ParsedCommand(CommandType.EVAL, [], raw)
+    if command == "/sessions":
+        return ParsedCommand(CommandType.SESSIONS, [], raw)
+    if command == "/resume":
+        session_id = text[len("/resume"):].strip()
+        if session_id:
+            return ParsedCommand(CommandType.RESUME, [session_id], raw)
+        return ParsedCommand(CommandType.UNKNOWN, [], "Usage: /resume <session_id>")
     return ParsedCommand(CommandType.UNKNOWN, args, raw)
 
 
@@ -69,5 +78,7 @@ HELP_TEXT = """Commands:
 /export answer output/a.pdf    Export last answer to PDF
 /export plan output/plan.pdf   Export latest study plan to PDF
 /eval                         Run evaluation and write reports
+/sessions                     List saved sessions
+/resume <session_id>          Resume a saved session
 /exit                         Exit the CLI
 """
