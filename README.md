@@ -10,7 +10,9 @@
 | 智能 RAG 检索 | 配置 Embedding 模型时使用 ChromaDB 语义检索，未配置时自动回退到关键词匹配 |
 | 工具注册与调用 | 字符串键名注册工具，智能体通过 ToolRegistry 发现并调用 |
 | 双层级记忆 | 短期会话记忆（session.json）+ 长期用户画像（profile.json） |
-| 多智能体协作 | Coordinator、Explainer、Interviewer、Reviewer、StudyPlanner 五个角色 |
+| 多智能体协作 | 消息传递 + 并行执行：Coordinator、PreInterview、Interview、PostInterview、JDAnalyzer、Resume |
+| JD 分析 | 岗位 JD 分析，提取技术栈、软技能、经验要求 |
+| 简历挖掘 | 简历项目深度挖掘，分析与 JD 匹配度 |
 | PDF 导入 | PyMuPDF 逐页提取文本，保留页码元数据用于来源引用 |
 | PDF 导出 | ReportLab 生成答案和学习计划 PDF，支持配置中文字体 |
 | 本地评估系统 | 8 个数据集案例，多维度指标，输出 md/json/pdf 三种报告 |
@@ -64,6 +66,9 @@ python main.py
 | `/export answer output/answer.pdf` | 导出最后一次回答为 PDF |
 | `/export plan output/study_plan.pdf` | 导出最新学习计划为 PDF |
 | `/eval` | 运行评估并输出报告 |
+| `/jd <文本或文件>` | 分析岗位 JD |
+| `/resume <文本或文件>` | 分析简历 |
+| `/match` | 分析简历与 JD 匹配度 |
 | `/exit` | 退出 |
 
 不以 `/` 开头的输入视为普通提问，进入智能体工作流处理。
@@ -82,13 +87,17 @@ CLI (src/cli/app.py)
     /xxx → CommandRegistry.execute() → Command.execute()
     普通文本 → AgentWorkflow.run() → Spinner + Markdown 渲染
 
-  Agent 工作流：
+  Agent 工作流（消息传递 + 并行执行）：
     → 加载上下文（记忆 + 用户画像）
-    → CoordinatorAgent.plan() 路由决策
-    → retrieve_knowledge() 关键词频率检索
-    → collaborate(): Explainer, Interviewer, Reviewer, (可选) StudyPlanner
-    → CoordinatorAgent.compose() 整合输出
-    → 可选：注入真实 LLM 优化回答
+    → CoordinatorAgent.analyze_intent() 意图分析
+    → 并行执行子 Agent：
+       - PreInterviewAgent: 面试前准备
+       - InterviewAgent: 面试中回答
+       - PostInterviewAgent: 面试后评审
+       - JDAnalyzerAgent: JD 分析（按需）
+       - ResumeAgent: 简历挖掘（按需）
+    → CoordinatorAgent.compose_final_answer() 汇总
+    → 可选：LLM 润色
 ```
 
 **模块职责：**
@@ -98,7 +107,7 @@ CLI (src/cli/app.py)
 | `src/cli/` | Claude Code 风格 CLI：输入框、输出渲染、命令系统、会话管理 |
 | `src/cli/ui/` | UI 组件：主题、输入框、输出渲染、Spinner、命令面板 |
 | `src/cli/commands/` | 命令系统：基类、内置命令、数据命令、文档命令、评估命令 |
-| `src/agents/` | LangGraph 工作流（graph.py）、智能体角色（roles.py）、状态类型（state.py） |
+| `src/agents/` | 多 Agent 协作：消息系统、工作流、Coordinator/Pre/Interview/Post/JD/Resume Agent |
 | `src/tools/` | 工具注册表，按名注册和调用，智能体通过它发现可用工具 |
 | `src/memory/` | JSON 文件存储：会话记忆 + 用户画像 |
 | `src/rag/` | 文档分块、JSON 关键词索引、检索 |
@@ -109,10 +118,12 @@ CLI (src/cli/app.py)
 
 **关键设计决策：**
 
+- **消息传递通信**：Agent 通过 MessageBus 进行消息传递，支持异步和同步请求-响应模式。
+- **并行执行**：无依赖的子 Agent 通过 ThreadPoolExecutor 并行执行，提升响应速度。
+- **全部可用 LLM**：每个 Agent 都可调用 LLM，无 LLM 时自动回退到确定性模板。
+- **主 Agent 决策**：CoordinatorAgent 分析用户意图，决定是否使用 RAG、派发哪些子 Agent。
 - RAG 检索使用关键词频率评分（Counter），确保测试无需外部 API 和向量模型。
-- 所有智能体角色默认输出确定性模板，不独立调用 LLM。可在 `AgentWorkflow` 注入 LLM 客户端来优化最终回答。
-- 记忆分为两层：`data/memory/session.json`（短期对话，保留最近 `MEMORY_MAX_TURNS` 轮）和 `data/memory/profile.json`（长期画像）。
-- ToolRegistry 保存了多个工具，智能体通过 `tools.call()` 发现和调用，而非直接调用函数。
+- 记忆分为两层：`data/memory/session.json`（短期对话）和 `data/memory/profile.json`（长期画像）。
 
 ## PDF 功能
 
