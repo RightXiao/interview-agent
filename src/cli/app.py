@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import readline
+import shutil
 import sys
 import threading
 import time
@@ -106,18 +108,20 @@ class CliSession:
         readline.parse_and_bind('"\\e[A": previous-history')
         readline.parse_and_bind('"\\e[B": next-history')
 
-        print("Agent Interview Coach CLI. Type /help for commands.")
+        self._print_banner()
         while True:
             try:
-                raw = input("> ")
+                raw = self._prompt_input()
             except (EOFError, KeyboardInterrupt):
                 self._save_on_exit()
                 print("\nBye.")
                 break
+            if not raw.strip():
+                continue
             result = self.handle_input(raw)
             if result == "exit":
                 self._save_on_exit()
-                print("Bye.")
+                self._print_goodbye()
                 break
             print(result)
 
@@ -125,6 +129,39 @@ class CliSession:
             readline.write_history_file(str(history_path))
         except OSError:
             pass
+
+    def _term_width(self) -> int:
+        return shutil.get_terminal_size((80, 24)).columns
+
+    def _print_banner(self) -> None:
+        w = self._term_width()
+        title = " Interview Coach "
+        line = "─" * (w - 2)
+        # Find center position for title
+        pad = (w - 2 - len(title)) // 2
+        top = "─" * pad + title + "─" * (w - 2 - pad - len(title))
+        print(f"┌{top}┐")
+        print(f"│{'Type /help for commands':^{w - 2}}│")
+        print(f"│{'Type /exit to quit':^{w - 2}}│")
+        print(f"└{line}┘")
+
+    def _prompt_input(self) -> str:
+        w = self._term_width()
+        line = "─" * w
+        print(f"\033[90m{line}\033[0m")
+        try:
+            raw = input("\033[36m>\033[0m ")
+        except (EOFError, KeyboardInterrupt):
+            raise
+        print(f"\033[90m{line}\033[0m")
+        return raw
+
+    def _print_goodbye(self) -> None:
+        w = self._term_width()
+        line = "─" * w
+        print(f"\033[90m{line}\033[0m")
+        print(f"{'Goodbye!':^{w}}")
+        print(f"\033[90m{line}\033[0m")
 
     def _handle_import(self, source: str) -> str:
         uploads_dir = self.base_dir / "data" / "uploads"
